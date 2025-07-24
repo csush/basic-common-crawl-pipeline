@@ -3,6 +3,7 @@ import csv
 import gzip
 from typing import Generator, List, Optional
 import requests
+import time
 
 
 CRAWL_PATH = "cc-index/collections/CC-MAIN-2024-30/indexes"
@@ -16,15 +17,26 @@ class Downloader(ABC):
 
 
 class CCDownloader(Downloader):
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, max_retries: int = 3, backoff_factor: float = 1.0) -> None:
         self.base_url = base_url
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
 
     def download_and_unzip(self, url: str, start: int, length: int) -> bytes:
-        headers = {"Range": f"bytes={start}-{start+length-1}"}
-        response = requests.get(f"{self.base_url}/{url}", headers=headers)
-        response.raise_for_status()
-        buffer = response.content
-        return gzip.decompress(buffer)
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                headers = {"Range": f"bytes={start}-{start+length-1}"}
+                response = requests.get(f"{self.base_url}/{url}", headers=headers)
+                response.raise_for_status()
+                buffer = response.content
+                return gzip.decompress(buffer)
+            except (requests.exceptions.RequestException, OSError) as e:
+                print(f"Download error (attempt {attempt}/{self.max_retries}): {e}")
+                if attempt == self.max_retries:
+                    raise
+                sleep_time = self.backoff_factor * (2 ** (attempt - 1))
+                print(f"Retrying in {sleep_time:.1f} seconds...")
+                time.sleep(sleep_time)
 
 
 class IndexReader(ABC):
