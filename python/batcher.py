@@ -67,9 +67,14 @@ def process_index(
 ) -> None:
     found_urls = []
     for cdx_chunk in index:
-        data = downloader.download_and_unzip(
-            cdx_chunk[1], int(cdx_chunk[2]), int(cdx_chunk[3])
-        ).decode("utf-8")
+        try:
+            data = downloader.download_and_unzip(
+                cdx_chunk[1], int(cdx_chunk[2]), int(cdx_chunk[3])
+            ).decode("utf-8")
+        except Exception as e:
+            print(f"Error downloading {cdx_chunk[1]}: {e}")
+            continue
+
         for line in data.split("\n"):
             if line == "":
                 continue
